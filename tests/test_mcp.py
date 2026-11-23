@@ -19,6 +19,7 @@ import httpx2
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
+from pydantic import SecretStr
 
 import server
 
@@ -52,12 +53,22 @@ def fake_aft() -> FakeAft:
 
 
 @pytest.fixture
+def sign_in() -> dict[str, Any]:
+    """Settings that change how the client signs in; empty keeps ``aft_env``'s.
+
+    A test overrides it with ``@pytest.mark.parametrize("sign_in", [...])``.
+    """
+    return {}
+
+
+@pytest.fixture
 async def client(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     settings: Settings,
     aft_like_spec: dict[str, Any],
     fake_aft: FakeAft,
+    sign_in: dict[str, Any],
 ) -> AsyncIterator[Client[Any]]:
     """An MCP client connected in memory to the real server, with AFT stubbed."""
     spec_file = tmp_path / "spec.json"
@@ -67,7 +78,7 @@ async def client(
     monkeypatch.setattr(
         server, "build_client", lambda given: real_build_client(given, transport)
     )
-    from_file = settings.model_copy(update={"spec_file": spec_file})
+    from_file = settings.model_copy(update={"spec_file": spec_file, **sign_in})
 
     async with Client(server.create_server(from_file)) as connected:
         yield connected
@@ -120,6 +131,20 @@ async def test_read_tool_calls_aft_with_basic_auth(
     assert request.headers["Authorization"] == basic_auth(
         aft_env["AFT_USERNAME"], aft_env["AFT_PASSWORD"]
     )
+
+
+@pytest.mark.parametrize(
+    "sign_in",
+    [{"token": SecretStr("aft_token_value"), "username": None, "password": None}],
+)
+async def test_read_tool_calls_aft_with_a_token(
+    client: Client[Any], fake_aft: FakeAft
+) -> None:
+    result = await client.call_tool("get_boards", {})
+
+    assert result.structured_content == {"result": BOARDS}
+    (request,) = fake_aft.requests
+    assert request.headers["Authorization"] == "Bearer aft_token_value"
 
 
 async def test_write_tool_sends_path_params_and_a_json_body(

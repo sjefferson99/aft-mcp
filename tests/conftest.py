@@ -15,8 +15,10 @@ ENV = {
 
 @pytest.fixture
 def aft_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    """Set every required AFT_* setting, and make sure AFT_SPEC_FILE is unset."""
+    """Set every required AFT_* setting (signing in with a username and password),
+    and make sure AFT_SPEC_FILE and AFT_TOKEN are unset."""
     monkeypatch.delenv("AFT_SPEC_FILE", raising=False)
+    monkeypatch.delenv("AFT_TOKEN", raising=False)
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     return ENV
