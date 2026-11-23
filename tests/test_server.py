@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 import httpx2
 import pytest
 from fastmcp import FastMCP
+from pydantic import SecretStr
 
 import server
 from settings import Settings, SettingsError
@@ -132,6 +133,30 @@ def test_build_client_uses_the_settings(settings: Settings) -> None:
     request = client.build_request("GET", "/api/boards")
     auth_flow = client._build_request_auth(request).auth_flow(request)
     assert next(auth_flow).headers["Authorization"].startswith("Basic ")
+
+
+def test_build_client_sends_a_token_as_bearer(settings: Settings) -> None:
+    with_token = settings.model_copy(
+        update={
+            "token": SecretStr("aft_token_value"),
+            "username": None,
+            "password": None,
+        }
+    )
+    client = server.build_client(with_token)
+    request = client.build_request("GET", "/api/boards")
+    auth = client._build_request_auth(request)
+    assert next(auth.auth_flow(request)).headers["Authorization"] == (
+        "Bearer aft_token_value"
+    )
+    assert "aft_token_value" not in repr(auth)
+    assert "aft_token_value" not in repr(vars(auth))
+
+
+def test_build_auth_never_sends_a_missing_password(settings: Settings) -> None:
+    incomplete = settings.model_copy(update={"password": None})
+    with pytest.raises(SettingsError):
+        server.build_auth(incomplete)
 
 
 # --- loading the spec -------------------------------------------------------------

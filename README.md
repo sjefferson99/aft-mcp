@@ -46,26 +46,31 @@ cp .env.example .env   # then edit .env
 All settings come from the process environment, then from `.env` (a variable already set in the environment wins).
 They are loaded once at startup into a typed settings class (`settings.py`, using
 [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)). There are no defaults in the code,
-so a missing or invalid setting stops the server, and the error lists every bad setting at once. The password is never
-shown in reprs, logs or errors.
+so a missing or invalid setting stops the server, and the error lists every bad setting at once. The token and password
+are never shown in reprs, logs or errors.
 
 | Variable        | Required | Description                                                            |
 |-----------------|----------|------------------------------------------------------------------------|
 | `AFT_BASE_URL`  | yes      | Base URL the generated tools call (`http://` or `https://`)            |
 | `AFT_SPEC_URL`  | yes*     | URL of the Swagger 2.0 / OpenAPI spec                                  |
 | `AFT_TIMEOUT`   | yes      | Request timeout in seconds, above zero                                 |
-| `AFT_USERNAME`  | yes      | AFT account email, sent as HTTP basic auth                             |
-| `AFT_PASSWORD`  | yes      | AFT account password                                                   |
+| `AFT_TOKEN`     | yes†     | AFT API token, sent as `Authorization: Bearer` (recommended)           |
+| `AFT_USERNAME`  | yes†     | AFT account email or username, sent as HTTP basic auth                 |
+| `AFT_PASSWORD`  | yes†     | AFT account password                                                   |
 | `AFT_SPEC_FILE` | no       | Load the spec from a local file instead of `AFT_SPEC_URL`              |
 
 \* Not needed when `AFT_SPEC_FILE` is set.
+
+† Set `AFT_TOKEN`, or both `AFT_USERNAME` and `AFT_PASSWORD`, not both ways.
 
 `.env` is git-ignored. Never commit real credentials.
 
 ### Recommended: a dedicated AFT user
 
-Don't use your own AFT account. Create a separate user for the agent (for example `claude`) and put its email and
-password in `.env`.
+Don't use your own AFT account. Create a separate user for the agent (for example `claude`), make it **API only**
+in User Management (it can't sign in to the web app), and choose **Create API Token** on it. Put the token in `.env`
+as `AFT_TOKEN`. Make the token read only if the agent only needs to look, and give it an expiry. On AFT versions
+without API tokens, use the user's email and password instead.
 
 - **Limit it to specific boards.** In AFT, give that user access only to the boards the agent should work on, with the
   lowest role that does the job: a read-only role for boards it should only look at, an edit role for boards where it
@@ -75,8 +80,8 @@ password in `.env`.
   restrict by board.
 - **Attribution.** Comments, edits and assignments made through the MCP are recorded against that user, so you can
   tell the agent's work from yours. It can also be assigned cards.
-- **Revocation.** If the credentials leak or the agent misbehaves, disable that one user without affecting your own
-  account.
+- **Revocation.** If the token leaks, revoke it in AFT (Manage API Tokens on the user) without changing anything
+  else. If the agent misbehaves, disable that one user without affecting your own account.
 
 The tools only work where the user has permission. A write on a board where it has read-only access is refused by AFT
 with a 403. `get_roles_my_roles` and `get_permissions_mapping` show what the user can currently do.
